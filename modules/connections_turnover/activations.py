@@ -8,7 +8,7 @@ IGNORE_REFS = {
     "wramaccount1",
     "wramaccount3",
     "wramaccount5",
-    "amarena",
+    "amarendra",
     "maintenance2",
     "maintenance",
 }
