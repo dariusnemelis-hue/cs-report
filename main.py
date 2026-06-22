@@ -18,6 +18,8 @@ from modules.connections_turnover.from_five_thousand import run as run_from_five
 from modules.connections_turnover.disconnections import run as run_disconnections
 from modules.new_turnover.monthly_turnover import run as run_monthly_turnover
 from modules.new_turnover.daily_turnover import run as run_daily_turnover
+from modules.new_turnover.segments import run as run_segments
+from modules.new_turnover.revenue import run as run_revenue
 from report_builder.builder import create_report
 
 
@@ -58,12 +60,13 @@ def main():
         print(f"[WARN] Не найден: {disc_file.name}")
         data["disconnections"] = {}
 
-    # === МОДУЛЬ 5: Обороты (новые + общий) ===
+    # === МОДУЛЬ 5: Обороты (новые + средний + общий) ===
     if act_file.exists():
-        data["monthly_turnover"], data["total_turnover"] = run_monthly_turnover(str(act_file))
+        data["monthly_turnover"], data["avg_new_turnover"], data["total_turnover"] = run_monthly_turnover(str(act_file))
     else:
         print(f"[WARN] Не найден: {act_file.name}")
         data["monthly_turnover"] = {}
+        data["avg_new_turnover"] = {}
         data["total_turnover"] = {}
 
     # === МОДУЛЬ 6: Средний дневной оборот новых мерчей ===
@@ -73,6 +76,22 @@ def main():
     else:
         print(f"[WARN] Не найден: {daily_file.name}")
         data["daily_turnover"] = {}
+
+    # === МОДУЛЬ 7: Сегменты по обороту ===
+    if act_file.exists():
+        data["segments"] = run_segments(str(act_file))
+    else:
+        print(f"[WARN] Не найден: {act_file.name}")
+        data["segments"] = {}
+
+    # === МОДУЛЬ X: Доходность новых и общая доходность ===
+    max_file = INPUT_DIR / "Кастомная выгрузка max.xlsx"
+    if max_file.exists():
+        data["new_revenue"], data["total_revenue_company"] = run_revenue(str(max_file))
+    else:
+        print(f"[WARN] Не найден: {max_file.name}")
+        data["new_revenue"] = {}
+        data["total_revenue_company"] = {}
 
     # === СБОРКА ===
     wb = create_report(data)

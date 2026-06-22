@@ -14,6 +14,7 @@ IGNORE_REFS = {
     "maintenance",
 }
 
+
 def get_month_from_file(filepath: str) -> str:
     """
     Определяет расчётный месяц из ячейки D1 файла.
@@ -44,20 +45,23 @@ def get_month_from_file(filepath: str) -> str:
     return None
 
 
-def run(file_path: str) -> tuple[dict[str, float], dict[str, float]]:
+def run(file_path: str) -> tuple[dict[str, float], dict[str, float], dict[str, float]]:
     """
-    За один проход по файлу считает два показателя для каждого менеджера:
+    За один проход по файлу считает три показателя для каждого менеджера:
 
-    1. new_turnover   — оборот только новых мерчантов,
-                        то есть тех, кто был привязан в расчётном месяце (столбец B).
-                        Используется чтобы видеть сколько принесли именно свежие подключения.
+    1. new_turnover     — суммарный оборот только новых мерчантов,
+                          то есть тех, кто был привязан в расчётном месяце (столбец B).
+                          Используется чтобы видеть сколько принесли именно свежие подключения.
 
-    2. total_turnover — оборот ВСЕХ мерчантов менеджера за расчётный месяц,
-                        без фильтра по дате привязки.
-                        Общая картина портфеля.
+    2. avg_new_turnover — средний оборот на одного нового мерчанта
+                          (new_turnover / кол-во новых мерчей).
+                          Показывает качество новых подключений.
 
-    Оба словаря: { ref_менеджера: сумма_оборота }
-    Возвращает кортеж (new_turnover, total_turnover).
+    3. total_turnover   — оборот ВСЕХ мерчантов менеджера за расчётный месяц,
+                          без фильтра по дате привязки.
+                          Общая картина портфеля.
+
+    Возвращает кортеж (new_turnover, avg_new_turnover, total_turnover).
 
     Структура входного файла "Кастомная выгрузка mini.xlsx":
         Строка 1  — заголовки (пропускается через header=0)
@@ -72,12 +76,13 @@ def run(file_path: str) -> tuple[dict[str, float], dict[str, float]]:
     if not month:
         print("[WARN] monthly_turnover: не удалось определить расчётный месяц")
         empty = {ref: 0.0 for ref in MANAGER_REFS}
-        return empty, empty
+        return empty, empty, empty
 
     # Читаем данные, первая строка — заголовок
     df = pd.read_excel(file_path, sheet_name=0, header=0)
 
     new_turnover   = defaultdict(float)  # оборот только новых мерчей
+    new_count      = defaultdict(int)    # кол-во новых мерчей (для подсчёта среднего)
     total_turnover = defaultdict(float)  # оборот всех мерчей
 
     for _, row in df.iterrows():
@@ -102,7 +107,7 @@ def run(file_path: str) -> tuple[dict[str, float], dict[str, float]]:
 
             t = float(str(turnover).replace(",", "."))
 
-            # Добавляем в общий оборот — без условий, все мерчанты
+            # Добавляем в общий оборот — все мерчанты без условий
             total_turnover[ref] += t
 
             # Определяем месяц привязки мерчанта
@@ -120,14 +125,23 @@ def run(file_path: str) -> tuple[dict[str, float], dict[str, float]]:
             # В новый оборот добавляем только если мерчант привязан в расчётном месяце
             if bind_month == month:
                 new_turnover[ref] += t
+                new_count[ref] += 1
 
         except (IndexError, ValueError, TypeError):
             continue
 
     print(f"[OK] Обороты: месяц {month}")
 
-    # Округляем до 2 знаков и возвращаем только нужных менеджеров из MANAGER_REFS
+    # Средний оборот нового мерчанта = сумма оборотов новых / кол-во новых
+    # Если новых мерчей нет — возвращаем 0.0
+    avg_new = {
+        ref: round(new_turnover.get(ref, 0.0) / new_count[ref], 2)
+        if new_count.get(ref, 0) > 0 else 0.0
+        for ref in MANAGER_REFS
+    }
+
     return (
         {ref: round(new_turnover.get(ref, 0.0), 2)   for ref in MANAGER_REFS},
+        avg_new,
         {ref: round(total_turnover.get(ref, 0.0), 2) for ref in MANAGER_REFS},
     )
